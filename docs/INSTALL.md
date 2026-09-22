@@ -150,7 +150,58 @@ The example configuration expects:
 /etc/zbx-ssh-gateway/tls/server.key
 ```
 
-After installing the appropriate certificate/key:
+#### Obtaining a Let's Encrypt certificate with Certbot
+
+The gateway does not need Apache or nginx. For a host with a public DNS name, Certbot's standalone authenticator is a simple way to obtain a certificate. The DNS name must resolve publicly to this server, and inbound TCP/80 must be reachable from the Internet while the ACME HTTP-01 challenge is performed.
+
+Install Certbot using the installation method recommended for your Debian system. Then, before the gateway is started, request a certificate, replacing `gateway.example.com` and the email address with your own values:
+
+```sh
+sudo certbot certonly --standalone \
+  --domain gateway.example.com \
+  --email admin@example.com \
+  --agree-tos \
+  --no-eff-email
+```
+
+The resulting certificate is normally maintained beneath:
+
+```text
+/etc/letsencrypt/live/gateway.example.com/
+    fullchain.pem
+    privkey.pem
+```
+
+Do not copy the private key into the source tree. The gateway service runs as `zbx-ssh-gateway`, so certificate deployment must preserve appropriate permissions while allowing the service to read its certificate and private key. One straightforward deployment is to copy the current Certbot-managed files into the gateway's protected TLS directory:
+
+```sh
+sudo install -o root -g zbx-ssh-gateway -m 0640 \
+  /etc/letsencrypt/live/gateway.example.com/fullchain.pem \
+  /etc/zbx-ssh-gateway/tls/server.crt
+
+sudo install -o root -g zbx-ssh-gateway -m 0640 \
+  /etc/letsencrypt/live/gateway.example.com/privkey.pem \
+  /etc/zbx-ssh-gateway/tls/server.key
+```
+
+Certbot renews its managed certificate, not these copied files. Therefore a production deployment using this method must use a Certbot deploy hook to refresh the gateway copies and restart or reload the gateway after successful renewal. Do not rely on the initial copies indefinitely.
+
+Test Certbot's renewal configuration with:
+
+```sh
+sudo certbot renew --dry-run
+```
+
+If TCP/80 cannot be exposed to the Internet, use a supported Certbot DNS authenticator instead of `--standalone`. DNS validation is also the appropriate approach for wildcard certificates.
+
+For current installation choices, DNS plugins, renewal hooks, and expanded Certbot instructions, see:
+
+- https://certbot.eff.org/instructions
+- https://eff-certbot.readthedocs.io/en/stable/using.html
+
+#### Using an existing certificate
+
+If you obtain the certificate by another method, install the certificate and private key at the paths configured in `gateway.local.yaml`, then protect them:
 
 ```sh
 sudo chown root:zbx-ssh-gateway /etc/zbx-ssh-gateway/tls/server.crt /etc/zbx-ssh-gateway/tls/server.key
