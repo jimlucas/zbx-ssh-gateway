@@ -1,6 +1,8 @@
 # Configuration
 
-The gateway reads YAML from `/etc/zbx-ssh-gateway/gateway.yaml` by default.
+The gateway reads the site-local YAML file `/etc/zbx-ssh-gateway/gateway.local.yaml` by default. Files matching `*.local.yaml` are intentionally ignored by Git so deployments and upgrades do not overwrite site-specific configuration or credentials.
+
+`configs/gateway.example.yaml` is the version-controlled reference/template. Copy it to `gateway.local.yaml` for a new installation and make all site-specific changes in the local file.
 
 ## SSH credentials
 
@@ -8,9 +10,11 @@ The gateway reads YAML from `/etc/zbx-ssh-gateway/gateway.yaml` by default.
 
 Only an SSH authentication failure advances to the next password. Connection, negotiation, and host-key failures stop the attempt.
 
-## Operations
+## Custom operations
 
-Zabbix supplies an operation name, never command text. Example:
+Add your custom operations under the top-level `operations:` section of `/etc/zbx-ssh-gateway/gateway.local.yaml`. Do not edit `configs/gateway.example.yaml` for deployment-specific operations; that file is maintained by the project and may change during upgrades.
+
+Example:
 
 ```yaml
 operations:
@@ -23,7 +27,7 @@ operations:
         required: true
 ```
 
-Request:
+Zabbix supplies the operation name, never command text. Request example:
 
 ```json
 {"target":"192.0.2.10","operation":"radio.stats","parameters":{"interface":"wlan0"}}
