@@ -24,18 +24,4 @@ limits:
   max_queue: 200
   max_output_bytes: 65536
   max_request_bytes: 16384
-operations:
-  device.version:
-    command: "show version"
-    parameters: {}
-    timeout_seconds: 10
-    max_output_bytes: 65536
-  radio.stats:
-    command: "radio stats ${interface}"
-    parameters:
-      interface:
-        type: enum
-        values: ["wlan0", "wlan1"]
-        required: true
-    timeout_seconds: 10
-    max_output_bytes: 65536
+operations_file: "/etc/zbx-ssh-gateway/operations.local.yaml"
