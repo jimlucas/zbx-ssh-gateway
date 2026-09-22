@@ -3,4 +3,4 @@
 *.pem
 *.key
 secrets/
-gateway.yaml
+*.local.yaml
