@@ -1,76 +1,44 @@
 # Installation and Upgrade
 
-This guide assumes Debian 12 and an administrative login that can use `sudo`. Commands show which user should run them and which working directory should be used.
+This guide assumes Debian 12 and an administrative login with `sudo`. Build and test as your normal administrative user. Use `sudo` only for system installation and service administration. The `zbx-ssh-gateway` account is a non-interactive runtime account; **never switch to it for installation or upgrades.**
 
-The daemon itself runs as the unprivileged `zbx-ssh-gateway` system account. **Do not log in or build the software as that account.** Source retrieval and compilation are performed as your normal administrative user; installation and system configuration use `sudo`.
+## Quick installation
 
-## 1. Install prerequisites
+### 1. Install prerequisites
 
 **User:** normal administrative user  
-**Directory:** your home directory
+**Directory:** home directory
 
 ```sh
 cd ~
 sudo apt update
-sudo apt install -y git golang-go ca-certificates openssl
-```
-
-Verify the tools:
-
-```sh
+sudo apt install -y git golang-go make ca-certificates openssl
 git --version
 go version
+make --version
 ```
 
-The project's Go version requirement is defined in `go.mod`. If Debian's packaged Go version is older than that requirement, install a compatible Go release before building.
+The required Go version is defined in `go.mod`. If Debian's packaged Go is older, install a compatible Go release before continuing.
 
-## 2. Obtain the source
+### 2. Obtain the source
 
-The canonical repository is:
-
-https://github.com/jimlucas/zbx-ssh-gateway
-
-For a source installation, keep the checkout under `/usr/local/src/zbx-ssh-gateway`. This directory contains source code only; the running daemon does not execute from this directory.
+Repository: https://github.com/jimlucas/zbx-ssh-gateway
 
 **User:** normal administrative user
-
-First create the source directory and give your administrative user ownership of the project checkout:
 
 ```sh
 sudo mkdir -p /usr/local/src
 sudo chown "$(id -u):$(id -g)" /usr/local/src
 cd /usr/local/src
-```
-
-Clone the repository:
-
-```sh
 git clone https://github.com/jimlucas/zbx-ssh-gateway.git
 cd /usr/local/src/zbx-ssh-gateway
 ```
 
-Confirm that you are in the correct directory:
+The expected source directory is `/usr/local/src/zbx-ssh-gateway`.
 
-```sh
-pwd
-git status
-```
+Releases, when published, are available at https://github.com/jimlucas/zbx-ssh-gateway/releases. Until a release explicitly supplies supported pre-built binaries, use this source installation procedure.
 
-The expected working directory is:
-
-```text
-/usr/local/src/zbx-ssh-gateway
-```
-
-### Installing from a release
-
-When packaged releases are available, they can be downloaded from:
-
-https://github.com/jimlucas/zbx-ssh-gateway/releases
-
-A release containing pre-built Debian/Linux binaries may be installed without cloning the repository. Follow the release notes for that version. Until a release explicitly supplies supported pre-built binaries, use the source-build procedure in this document.
-
-## 3. Run the test suite
+### 3. Test and build
 
 **User:** normal administrative user  
 **Directory:** `/usr/local/src/zbx-ssh-gateway`
@@ -78,60 +46,39 @@ A release containing pre-built Debian/Linux binaries may be installed without cl
 ```sh
 cd /usr/local/src/zbx-ssh-gateway
 go mod download
-go test ./...
-go vet ./...
+make check
+make build
 ```
 
-Do not proceed with installation if the tests or vet checks fail.
+Do not install if `make check` fails.
 
-## 4. Build the binaries
+### 4. Install
 
-**User:** normal administrative user  
+**User:** root privileges via `sudo`  
 **Directory:** `/usr/local/src/zbx-ssh-gateway`
 
 ```sh
 cd /usr/local/src/zbx-ssh-gateway
-mkdir -p bin
-go build -o bin/zbx-ssh-gateway ./cmd/zbx-ssh-gateway
-go build -o bin/zbx-ssh-gatewayctl ./cmd/zbx-ssh-gatewayctl
+sudo make install
 ```
 
-The resulting files are:
+The install target:
+
+- creates the `zbx-ssh-gateway` system user/group if absent;
+- creates protected configuration directories;
+- builds and installs both binaries;
+- installs the systemd unit;
+- creates `gateway.local.yaml` and `operations.local.yaml` from their examples **only if those local files do not already exist**;
+- runs `systemctl daemon-reload`.
+
+It deliberately does **not** start or enable the daemon. Complete security configuration first.
+
+Installed layout:
 
 ```text
-/usr/local/src/zbx-ssh-gateway/bin/zbx-ssh-gateway
-/usr/local/src/zbx-ssh-gateway/bin/zbx-ssh-gatewayctl
-```
+/usr/sbin/zbx-ssh-gateway
+/usr/bin/zbx-ssh-gatewayctl
 
-## 5. Create the service account
-
-The service account is deliberately non-interactive. You do **not** switch to this user during installation.
-
-**User:** normal administrative user using `sudo`
-
-```sh
-sudo useradd --system \
-  --home /var/lib/zbx-ssh-gateway \
-  --create-home \
-  --shell /usr/sbin/nologin \
-  zbx-ssh-gateway
-```
-
-If the account already exists, `useradd` will report that fact; do not recreate it.
-
-## 6. Create runtime configuration directories
-
-**User:** normal administrative user using `sudo`
-
-```sh
-sudo install -d -o root -g zbx-ssh-gateway -m 0750 /etc/zbx-ssh-gateway
-sudo install -d -o root -g zbx-ssh-gateway -m 0750 /etc/zbx-ssh-gateway/secrets
-sudo install -d -o root -g zbx-ssh-gateway -m 0750 /etc/zbx-ssh-gateway/tls
-```
-
-The intended layout is:
-
-```text
 /etc/zbx-ssh-gateway/
     gateway.local.yaml
     operations.local.yaml
@@ -141,53 +88,33 @@ The intended layout is:
     tls/
         server.crt
         server.key
+
+/etc/systemd/system/zbx-ssh-gateway.service
 ```
 
-## 7. Install the binaries
+The source/build tree remains in `/usr/local/src/zbx-ssh-gateway`.
 
-**User:** normal administrative user using `sudo`  
-**Directory:** `/usr/local/src/zbx-ssh-gateway`
+## Configure the installation
 
-```sh
-cd /usr/local/src/zbx-ssh-gateway
-sudo install -o root -g root -m 0755 bin/zbx-ssh-gateway /usr/sbin/zbx-ssh-gateway
-sudo install -o root -g root -m 0755 bin/zbx-ssh-gatewayctl /usr/bin/zbx-ssh-gatewayctl
-```
-
-The source checkout remains under `/usr/local/src`; only the built binaries are copied into the system executable directories.
-
-## 8. Create the local configuration
-
-**User:** normal administrative user using `sudo`  
-**Directory:** `/usr/local/src/zbx-ssh-gateway`
-
-For a **new installation only**, copy the example files:
-
-```sh
-cd /usr/local/src/zbx-ssh-gateway
-sudo install -o root -g zbx-ssh-gateway -m 0640 configs/gateway.example.yaml /etc/zbx-ssh-gateway/gateway.local.yaml
-sudo install -o root -g zbx-ssh-gateway -m 0640 configs/operations.example.yaml /etc/zbx-ssh-gateway/operations.local.yaml
-```
-
-Do not run those two commands over an existing installation. The `*.local.yaml` files belong to the local system and are deliberately excluded from Git.
-
-Edit the main configuration:
+### Main configuration
 
 ```sh
 sudo editor /etc/zbx-ssh-gateway/gateway.local.yaml
 ```
 
-Edit the operation allowlist:
+This contains listener, TLS, API, SSH credentials/password list, resource limits, and the path to the operations file.
+
+### Operations
 
 ```sh
 sudo editor /etc/zbx-ssh-gateway/operations.local.yaml
 ```
 
-All custom polling commands belong in `operations.local.yaml`.
+All custom Zabbix polling operations belong here.
 
-## 9. Configure the API token
+Both `*.local.yaml` files are persistent site configuration. Future `sudo make install` runs preserve them.
 
-Generate a random bearer token:
+### API token
 
 ```sh
 openssl rand -hex 32 | sudo tee /etc/zbx-ssh-gateway/secrets/api-token >/dev/null
@@ -195,75 +122,58 @@ sudo chown root:zbx-ssh-gateway /etc/zbx-ssh-gateway/secrets/api-token
 sudo chmod 0640 /etc/zbx-ssh-gateway/secrets/api-token
 ```
 
-Do not place this token in the Git repository.
+Never commit this token.
 
-## 10. Configure SSH host keys
+### SSH known_hosts
 
-The gateway uses strict SSH host-key verification. Create and maintain:
+Strict host-key verification uses:
 
 ```text
 /etc/zbx-ssh-gateway/known_hosts
 ```
 
-Populate it only with host keys you have verified through a trusted source. Do not disable host-key verification simply to make initial testing easier.
-
-After creating it:
+Populate it with host keys verified through a trusted source, then:
 
 ```sh
 sudo chown root:zbx-ssh-gateway /etc/zbx-ssh-gateway/known_hosts
 sudo chmod 0640 /etc/zbx-ssh-gateway/known_hosts
 ```
 
-## 11. Configure HTTPS certificates
+Do not disable host-key verification to simplify testing.
 
-Place the server certificate and private key at the locations configured in `gateway.local.yaml`. The example configuration uses:
+### HTTPS certificate
+
+The example configuration expects:
 
 ```text
 /etc/zbx-ssh-gateway/tls/server.crt
 /etc/zbx-ssh-gateway/tls/server.key
 ```
 
-Protect the private key:
+After installing the appropriate certificate/key:
 
 ```sh
 sudo chown root:zbx-ssh-gateway /etc/zbx-ssh-gateway/tls/server.crt /etc/zbx-ssh-gateway/tls/server.key
 sudo chmod 0640 /etc/zbx-ssh-gateway/tls/server.crt /etc/zbx-ssh-gateway/tls/server.key
 ```
 
-## 12. Install the systemd service
+## Start the service
 
-**User:** normal administrative user using `sudo`  
-**Directory:** `/usr/local/src/zbx-ssh-gateway`
-
-```sh
-cd /usr/local/src/zbx-ssh-gateway
-sudo install -o root -g root -m 0644 packaging/systemd/zbx-ssh-gateway.service /etc/systemd/system/zbx-ssh-gateway.service
-sudo systemctl daemon-reload
-sudo systemctl enable zbx-ssh-gateway
-```
-
-Do not start the service until the local YAML files, bearer token, TLS files, and `known_hosts` are ready.
-
-## 13. Start and verify the daemon
+Only after the local configuration, API token, TLS files, and `known_hosts` are ready:
 
 ```sh
-sudo systemctl start zbx-ssh-gateway
+sudo systemctl enable --now zbx-ssh-gateway
 sudo systemctl status zbx-ssh-gateway
 ```
 
-View daemon logs with:
+Logs:
 
 ```sh
 sudo journalctl -u zbx-ssh-gateway -n 100 --no-pager
-```
-
-Follow logs interactively with:
-
-```sh
 sudo journalctl -u zbx-ssh-gateway -f
 ```
 
-The service process should run as `zbx-ssh-gateway`:
+Verify that the daemon runs as the unprivileged service account:
 
 ```sh
 ps -o user,group,pid,cmd -C zbx-ssh-gateway
@@ -271,27 +181,60 @@ ps -o user,group,pid,cmd -C zbx-ssh-gateway
 
 You should never need to `su` or log in as `zbx-ssh-gateway`.
 
-## 14. Network access
+## Network requirements
 
-Restrict the configured HTTPS listener (9443 in the example configuration) so it is reachable only from the primary Zabbix Server and any explicitly authorized administrative/test hosts.
+Restrict the HTTPS listener (TCP/9443 in the example) to the primary Zabbix Server and explicitly authorized administrative/test hosts. The gateway requires outbound TCP/22 access to the network equipment it polls.
 
-The gateway itself also requires outbound TCP/22 access to the network equipment it polls.
+## Make targets
+
+From `/usr/local/src/zbx-ssh-gateway`, the supported targets are:
+
+```text
+make build             Build both binaries into ./bin
+make test              Run Go tests
+make vet               Run go vet
+make check             Run tests and vet
+
+sudo make install      Safe complete system installation/update
+sudo make install-user Create the service account/group if needed
+sudo make install-dirs Create protected configuration directories
+sudo make install-binaries
+                       Build and install binaries
+sudo make install-config
+                       Create missing local configs; never overwrite existing ones
+sudo make install-systemd
+                       Install the systemd unit and daemon-reload
+
+sudo make config-diff  Compare examples with installed local configuration
+sudo make uninstall    Remove binaries/unit but preserve local configuration
+make clean             Remove ./bin
+```
+
+### Important uninstall behavior
+
+`sudo make uninstall` intentionally preserves:
+
+```text
+/etc/zbx-ssh-gateway/
+/var/lib/zbx-ssh-gateway/
+```
+
+This prevents an uninstall/reinstall cycle from deleting credentials, operations, TLS material, host keys, or other local state.
 
 ## Upgrade procedure
 
-### 1. Become your normal administrative user
+### 1. Use your normal administrative account
 
-Do not perform upgrades as the `zbx-ssh-gateway` service account.
+Do not switch to `zbx-ssh-gateway`.
 
 ### 2. Back up local configuration
 
 ```sh
+sudo rm -rf /etc/zbx-ssh-gateway.backup
 sudo cp -a /etc/zbx-ssh-gateway /etc/zbx-ssh-gateway.backup
 ```
 
-### 3. Update the source checkout
-
-**Directory:** `/usr/local/src/zbx-ssh-gateway`
+### 3. Update the checkout
 
 ```sh
 cd /usr/local/src/zbx-ssh-gateway
@@ -299,41 +242,37 @@ git status
 git pull --ff-only
 ```
 
-If `git status` reports local modifications, review them before pulling. Site configuration should not normally exist inside this checkout.
+If `git status` reports modifications, review them before pulling. Site-specific configuration should not normally be stored in the checkout.
 
 ### 4. Review configuration changes
 
-Compare:
-
-```text
-configs/gateway.example.yaml   -> /etc/zbx-ssh-gateway/gateway.local.yaml
-configs/operations.example.yaml -> /etc/zbx-ssh-gateway/operations.local.yaml
+```sh
+cd /usr/local/src/zbx-ssh-gateway
+sudo make config-diff
 ```
 
-Manually incorporate any newly required settings. **Never copy the example files over existing local files during an upgrade.**
+This compares the current project examples against the installed local configuration. Differences are informational; `config-diff` does not modify anything.
 
-### 5. Test and rebuild
+Manually add newly required settings to the local files. Never replace existing local files with the examples during an upgrade.
+
+### 5. Test
 
 ```sh
 cd /usr/local/src/zbx-ssh-gateway
 go mod download
-go test ./...
-go vet ./...
-mkdir -p bin
-go build -o bin/zbx-ssh-gateway ./cmd/zbx-ssh-gateway
-go build -o bin/zbx-ssh-gatewayctl ./cmd/zbx-ssh-gatewayctl
+make check
 ```
 
-### 6. Stop, replace, and restart
+### 6. Install the update
 
 ```sh
+cd /usr/local/src/zbx-ssh-gateway
 sudo systemctl stop zbx-ssh-gateway
-sudo install -o root -g root -m 0755 bin/zbx-ssh-gateway /usr/sbin/zbx-ssh-gateway
-sudo install -o root -g root -m 0755 bin/zbx-ssh-gatewayctl /usr/bin/zbx-ssh-gatewayctl
-sudo install -o root -g root -m 0644 packaging/systemd/zbx-ssh-gateway.service /etc/systemd/system/zbx-ssh-gateway.service
-sudo systemctl daemon-reload
+sudo make install
 sudo systemctl start zbx-ssh-gateway
 ```
+
+`make install` replaces the binaries and project-managed systemd unit while preserving both local YAML files.
 
 ### 7. Verify
 
@@ -344,6 +283,22 @@ sudo journalctl -u zbx-ssh-gateway -n 100 --no-pager
 
 Confirm a test Zabbix HTTP Agent item before returning the gateway to broad polling.
 
+## Manual installation / troubleshooting
+
+The Makefile performs standard Unix installation operations. If troubleshooting requires doing them manually, the equivalent high-level sequence is:
+
+1. Build both Go commands from the repository root.
+2. Create the `zbx-ssh-gateway` system user/group.
+3. Create `/etc/zbx-ssh-gateway/{secrets,tls}`.
+4. Install the daemon to `/usr/sbin/zbx-ssh-gateway`.
+5. Install the control utility to `/usr/bin/zbx-ssh-gatewayctl`.
+6. On a new installation only, copy the example YAML files to their corresponding `*.local.yaml` paths.
+7. Install the systemd unit under `/etc/systemd/system`.
+8. Run `systemctl daemon-reload`.
+9. Configure credentials, known hosts, TLS, and network policy before starting the service.
+
+The Makefile itself is the definitive reference for the exact file modes and ownership used by automated installation.
+
 ## Rollback
 
-Stop the service, restore the previous binaries if necessary, restore the configuration backup, run `systemctl daemon-reload` if the unit file changed, and restart the service.
+Stop the service, restore the previous binaries if necessary, restore `/etc/zbx-ssh-gateway` from the backup, run `systemctl daemon-reload` if the unit changed, and restart the service.
