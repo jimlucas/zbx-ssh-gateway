@@ -1,0 +1,41 @@
+server:
+  listen: "0.0.0.0"
+  port: 9443
+  tls:
+    enabled: true
+    certificate: "/etc/zbx-ssh-gateway/tls/server.crt"
+    private_key: "/etc/zbx-ssh-gateway/tls/server.key"
+api:
+  bearer_token_file: "/etc/zbx-ssh-gateway/secrets/api-token"
+ssh:
+  username: "admin"
+  port: 22
+  connect_timeout_seconds: 5
+  command_timeout_seconds: 10
+  known_hosts: "/etc/zbx-ssh-gateway/known_hosts"
+  password_list:
+    name: "network-equipment"
+    passwords:
+      - "CHANGE-ME-1"
+      - "CHANGE-ME-2"
+      - "CHANGE-ME-3"
+limits:
+  max_workers: 20
+  max_queue: 200
+  max_output_bytes: 65536
+  max_request_bytes: 16384
+operations:
+  device.version:
+    command: "show version"
+    parameters: {}
+    timeout_seconds: 10
+    max_output_bytes: 65536
+  radio.stats:
+    command: "radio stats ${interface}"
+    parameters:
+      interface:
+        type: enum
+        values: ["wlan0", "wlan1"]
+        required: true
+    timeout_seconds: 10
+    max_output_bytes: 65536
