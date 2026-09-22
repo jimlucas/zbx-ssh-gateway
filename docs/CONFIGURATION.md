@@ -1,8 +1,23 @@
 # Configuration
 
-The gateway reads the site-local YAML file `/etc/zbx-ssh-gateway/gateway.local.yaml` by default. Files matching `*.local.yaml` are intentionally ignored by Git so deployments and upgrades do not overwrite site-specific configuration or credentials.
+The gateway uses two site-local YAML files:
 
-`configs/gateway.example.yaml` is the version-controlled reference/template. Copy it to `gateway.local.yaml` for a new installation and make all site-specific changes in the local file.
+- `/etc/zbx-ssh-gateway/gateway.local.yaml` — listener, TLS, API authentication, SSH credentials, limits, and the operations-file location.
+- `/etc/zbx-ssh-gateway/operations.local.yaml` — the allowlisted operations Zabbix is permitted to request.
+
+Files matching `*.local.yaml` are intentionally ignored by Git so deployments and upgrades do not overwrite site-specific configuration.
+
+The version-controlled templates are `configs/gateway.example.yaml` and `configs/operations.example.yaml`.
+
+## Linking the files
+
+`gateway.local.yaml` contains:
+
+```yaml
+operations_file: "/etc/zbx-ssh-gateway/operations.local.yaml"
+```
+
+A relative path is also supported and is resolved relative to the directory containing `gateway.local.yaml`.
 
 ## SSH credentials
 
@@ -12,9 +27,7 @@ Only an SSH authentication failure advances to the next password. Connection, ne
 
 ## Custom operations
 
-Add your custom operations under the top-level `operations:` section of `/etc/zbx-ssh-gateway/gateway.local.yaml`. Do not edit `configs/gateway.example.yaml` for deployment-specific operations; that file is maintained by the project and may change during upgrades.
-
-Example:
+Put all site-specific operations in `/etc/zbx-ssh-gateway/operations.local.yaml`:
 
 ```yaml
 operations:
@@ -25,19 +38,15 @@ operations:
         type: enum
         values: ["wlan0", "wlan1"]
         required: true
+    timeout_seconds: 10
+    max_output_bytes: 65536
 ```
 
-Zabbix supplies the operation name, never command text. Request example:
-
-```json
-{"target":"192.0.2.10","operation":"radio.stats","parameters":{"interface":"wlan0"}}
-```
-
-Unknown JSON fields and unknown operation parameters are rejected. Validator types are `enum`, `regex`, and bounded `string`; prefer `enum` whenever possible.
+Zabbix supplies the operation name, never command text. Unknown JSON fields and unknown operation parameters are rejected. Validator types are `enum`, `regex`, and bounded `string`; prefer `enum` whenever possible.
 
 ## Zabbix HTTP Agent
 
-POST JSON to `https://GATEWAY:9443/api/v1/execute` with `Content-Type: application/json` and `Authorization: Bearer <token>`. Store the API token as a protected Zabbix secret macro where available. SSH passwords must never be stored in Zabbix.
+POST JSON to `https://GATEWAY:9443/api/v1/execute` with `Content-Type: application/json` and `Authorization: Bearer <token>`. SSH passwords must never be stored in Zabbix.
 
 For scalar checks, JSONPath preprocessing can extract `$.value`. For commands returning multiple metrics, use a master HTTP Agent item and dependent items.
 
