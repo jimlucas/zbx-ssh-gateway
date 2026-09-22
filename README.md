@@ -15,9 +15,22 @@ The Zabbix Proxy and Agent 2 are not in this polling path.
 ## Development
 
 ```sh
-go test ./...
-go vet ./...
-go build ./cmd/zbx-ssh-gateway ./cmd/zbx-ssh-gatewayctl
+make check
+make build
 ```
 
-See `docs/INSTALL.md` and `docs/CONFIGURATION.md`.
+## Installation
+
+On Debian 12, obtain the source and install from the repository root:
+
+```sh
+cd /usr/local/src
+git clone https://github.com/jimlucas/zbx-ssh-gateway.git
+cd zbx-ssh-gateway
+make check
+sudo make install
+```
+
+The installer preserves existing `/etc/zbx-ssh-gateway/gateway.local.yaml` and `operations.local.yaml` files. Complete TLS, API token, SSH host-key, credential, and network configuration before starting the service.
+
+See `docs/INSTALL.md` for the complete installation/upgrade procedure and `docs/CONFIGURATION.md` for configuration details.
