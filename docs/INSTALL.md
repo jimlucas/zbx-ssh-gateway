@@ -16,9 +16,11 @@ go build -o zbx-ssh-gateway ./cmd/zbx-ssh-gateway
 go build -o zbx-ssh-gatewayctl ./cmd/zbx-ssh-gatewayctl
 sudo install -o root -g root -m 0755 zbx-ssh-gateway /usr/sbin/zbx-ssh-gateway
 sudo install -o root -g root -m 0755 zbx-ssh-gatewayctl /usr/bin/zbx-ssh-gatewayctl
-sudo cp configs/gateway.example.yaml /etc/zbx-ssh-gateway/gateway.yaml
+sudo install -o root -g zbx-ssh-gateway -m 0640 configs/gateway.example.yaml /etc/zbx-ssh-gateway/gateway.local.yaml
 sudo cp packaging/systemd/zbx-ssh-gateway.service /etc/systemd/system/
 ```
+
+`gateway.local.yaml` is the site's persistent configuration. It is not a version-controlled deployment file and must not be overwritten during upgrades. Put custom operations under its top-level `operations:` section.
 
 Create the bearer-token file and TLS certificate/key, populate `known_hosts`, and protect configuration permissions. Restrict TCP/9443 at the firewall to the primary Zabbix Server.
 
@@ -30,11 +32,13 @@ sudo systemctl status zbx-ssh-gateway
 
 ## Upgrade
 
-1. Back up `/etc/zbx-ssh-gateway`.
-2. Review release notes and compare the example YAML with the installed configuration.
-3. Build or obtain the new binary and run the test suite for source builds.
-4. Stop the service and replace the binary while preserving configuration.
-5. Start the service and verify `/api/v1/health`.
-6. Confirm a test Zabbix HTTP Agent item before broad polling resumes.
+1. Back up `/etc/zbx-ssh-gateway`, including `gateway.local.yaml`.
+2. Review release notes and compare `configs/gateway.example.yaml` with the installed `gateway.local.yaml` for newly introduced settings.
+3. Do **not** copy the example YAML over `gateway.local.yaml` during an upgrade.
+4. Build or obtain the new binary and run the test suite for source builds.
+5. Stop the service and replace the binary while preserving local configuration.
+6. Install an updated systemd unit if the release changes it, then run `systemctl daemon-reload`.
+7. Start the service and verify `/api/v1/health`.
+8. Confirm a test Zabbix HTTP Agent item before broad polling resumes.
 
 Rollback by restoring the prior binary and configuration backup and restarting the service.
