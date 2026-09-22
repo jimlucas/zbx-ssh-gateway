@@ -1,0 +1,23 @@
+[Unit]
+Description=Zabbix Secure SSH Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zbx-ssh-gateway
+Group=zbx-ssh-gateway
+ExecStart=/usr/sbin/zbx-ssh-gateway -config /etc/zbx-ssh-gateway/gateway.yaml
+Restart=on-failure
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
